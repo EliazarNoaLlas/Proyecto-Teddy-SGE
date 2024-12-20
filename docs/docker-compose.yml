@@ -1,0 +1,87 @@
+#version: '3'  # Especifica la versión del formato de Docker Compose que se está utilizando.
+
+services:  # Define los servicios que se ejecutarán en contenedores.
+
+  # Teedy Application (aplicación principal)
+  teedy-server:
+    image: sismics/docs:v1.11  # Especifica la imagen de Docker que se usará para el contenedor de Teedy, en este caso, versión 1.11.
+    restart: unless-stopped  # Reinicia el contenedor si se detiene, a menos que lo hagas manualmente.
+    ports:
+      # Mapea el puerto interno 8080 del contenedor al puerto 8080 de la máquina host.
+      - 8080:8080
+    environment:
+      # Configura las variables de entorno utilizadas por Teedy.
+      
+      # Define la URL base de la aplicación. Deberías cambiarla para que coincida con el dominio o la dirección IP que usarás.
+      DOCS_BASE_URL: "http://localhost:8080"
+      
+      # Correo electrónico que se usará para crear la cuenta de administrador por primera vez.
+      DOCS_ADMIN_EMAIL_INIT: "admin@misdocumentos.com"
+      
+      # Contraseña encriptada de bcrypt para el administrador inicial. Puedes cambiarla si generas una nueva.
+      DOCS_ADMIN_PASSWORD_INIT: "$$2a$12$30CvkFjY6E.1prfWSjhHk.q9PGq659DuvidN77Rw2UJUnWUq2QNM2"
+      
+      # Configuración de la base de datos PostgreSQL.
+      
+      # La URL de conexión para la base de datos. Aquí `teedy-db` es el nombre del servicio de la base de datos definido más adelante.
+      DATABASE_URL: "jdbc:postgresql://teedy-db:5432/teedy"
+      
+      # El nombre de usuario para conectarse a la base de datos.
+      DATABASE_USER: "teedy_db_user"
+      
+      # La contraseña para el usuario de la base de datos.
+      DATABASE_PASSWORD: "teedy_db_password"
+      
+      # El tamaño máximo de la conexión de pool de base de datos (número máximo de conexiones simultáneas).
+      DATABASE_POOL_SIZE: "10"
+      
+    volumes:
+      # Mapea una carpeta local (./docs/data) al directorio /data dentro del contenedor, donde se almacenarán los datos de Teedy.
+      - ./docs/data:/data
+    
+    networks:
+      # Conecta el servicio de Teedy a dos redes: una interna (sin acceso a internet) y otra con acceso a la red externa.
+      - docker-internal
+      - internet
+    
+    # Define que Teedy depende de que el servicio teedy-db (PostgreSQL) esté activo y ejecutándose primero.
+    depends_on:
+      - teedy-db
+
+  # DB for Teedy (base de datos PostgreSQL)
+  teedy-db:
+    image: postgres:13.1-alpine  # Usa una imagen ligera de PostgreSQL basada en Alpine Linux.
+    restart: unless-stopped  # Reinicia el contenedor si falla, a menos que se detenga manualmente.
+    
+    ports:
+    - 5432:5432  # Map internal port 5432 to host port 5432
+    
+    environment:
+      # Configura las variables de entorno necesarias para PostgreSQL.
+      
+      # Usuario de la base de datos que se creará al iniciar el contenedor.
+      POSTGRES_USER: "teedy_db_user"
+      
+      # Contraseña del usuario de la base de datos.
+      POSTGRES_PASSWORD: "teedy_db_password"
+      
+      # Nombre de la base de datos que se creará al iniciar el contenedor.
+      POSTGRES_DB: "teedy"
+    
+    volumes:
+      # Mapea una carpeta local (./docs/db) al directorio donde PostgreSQL guarda los datos.
+      - ./docs/db:/var/lib/postgresql/data
+    
+    networks:
+      # Conecta la base de datos solo a la red interna, ya que no necesita acceso a la red externa.
+      - docker-internal
+
+# Definición de las redes
+networks:
+  # Red interna sin acceso a internet. Se usa para conectar Teedy con su base de datos PostgreSQL de manera segura.
+  docker-internal:
+    driver: bridge  # La red interna es de tipo "bridge", que permite la comunicación entre contenedores.
+
+  # Red con acceso a internet, usada por el contenedor de Teedy para servir la aplicación.
+  internet:
+    driver: bridge  # La red con acceso a la red externa también es de tipo "bridge".
